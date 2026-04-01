@@ -1,0 +1,340 @@
+Anime Nexus Hub is an interactive anime platform designed for anime enthusiasts to discover, track, and discuss their favorite shows. Users can:
+
+Search and explore anime titles using the integrated Jikan API.
+Get AI-generated trending recommendations to discover popular and top-rated anime.
+Create an account to securely login, manage a personal watchlist, and post comments on anime.
+Enjoy a dark/light theme toggle for a personalized viewing experience.
+Watch anime trailers directly on the site with embedded video support.
+
+The platform combines real-time search, personalized watchlists, and user-driven comments, making it a one-stop hub for anime fans to interact with the anime community.
+
+
+
+
+
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Anime Nexus Hub</title>
+
+<style>
+body {font-family:Arial;margin:0;background:#0f172a;color:white;}
+.light {background:#f1f5f9;color:black;}
+
+header {padding:20px;text-align:center;background:#1e293b;}
+button {padding:8px;margin:5px;cursor:pointer;}
+
+.container {
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+gap:15px;padding:20px;
+}
+
+.card {
+background:#1e293b;border-radius:10px;overflow:hidden;cursor:pointer;
+transition:0.3s;
+}
+.card:hover {transform:scale(1.03);}
+
+.poster {width:100%;height:300px;object-fit:cover;}
+.content {padding:10px;}
+
+.hidden {display:none;}
+
+.detail-page {
+padding:20px;
+max-width:900px;
+margin:auto;
+}
+
+.detail-img {
+width:250px;
+float:left;
+margin-right:20px;
+}
+
+.clear {clear:both;}
+
+#loginForm, #registerForm {
+display:none;
+background:#1e293b;
+padding:20px;
+max-width:400px;
+margin:20px auto;
+border-radius:10px;
+}
+
+input {padding:8px;width:calc(100% - 16px);margin:5px 0;display:block;}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>Anime Nexus Hub</h1>
+<p>By Senula Karunarathne</p>
+
+<button onclick="toggleTheme()">🌗 Theme</button>
+<button id="loginBtn" onclick="showLogin()">👤 Login</button>
+<button id="logoutBtn" onclick="logout()" class="hidden">🚪 Logout</button>
+</header>
+
+<!-- LOGIN & REGISTER -->
+<div id="loginForm">
+<h3>Login</h3>
+<input id="loginUser" placeholder="Username">
+<input id="loginPass" type="password" placeholder="Password">
+<button onclick="login()">Login</button>
+<p>Don't have an account? <span style="color:#0ea5e9;cursor:pointer" onclick="showRegister()">Register</span></p>
+</div>
+
+<div id="registerForm">
+<h3>Register</h3>
+<input id="regUser" placeholder="Username">
+<input id="regPass" type="password" placeholder="Password">
+<button onclick="register()">Register</button>
+<p>Already have an account? <span style="color:#0ea5e9;cursor:pointer" onclick="showLogin()">Login</span></p>
+</div>
+
+<!-- MAIN -->
+<div id="mainPage">
+
+<div style="text-align:center;">
+<input id="search" placeholder="Search anime..." oninput="handleSearchInput()">
+<button onclick="searchAnime()">Search</button>
+</div>
+
+<h2 style="text-align:center;">🤖 AI Recommendations</h2>
+<div class="container" id="aiBox"></div>
+
+<h2 style="text-align:center;">❤️ Watchlist</h2>
+<div class="container" id="watchlist"></div>
+
+<div class="container" id="animeBox"></div>
+
+</div>
+
+<!-- DETAIL PAGE -->
+<div id="detailPage" class="hidden">
+<button onclick="goBack()">⬅ Back</button>
+<div class="detail-page" id="details"></div>
+
+<div class="detail-page">
+<h3>💬 Comments</h3>
+<div id="comments"></div>
+<input id="commentInput" placeholder="Add a comment">
+<button onclick="addComment()">Post</button>
+</div>
+</div>
+
+<script>
+
+// THEME
+function toggleTheme(){
+document.body.classList.toggle("light");
+}
+
+// CURRENT USER
+let currentUser = localStorage.getItem("currentUser") || "";
+updateLoginUI();
+
+// LOGIN SYSTEM
+function showLogin(){
+document.getElementById("loginForm").style.display="block";
+document.getElementById("registerForm").style.display="none";
+}
+
+function showRegister(){
+document.getElementById("loginForm").style.display="none";
+document.getElementById("registerForm").style.display="block";
+}
+
+function register(){
+let user=document.getElementById("regUser").value.trim();
+let pass=document.getElementById("regPass").value;
+if(!user || !pass){alert("Enter username and password");return;}
+let users = JSON.parse(localStorage.getItem("users")||"{}");
+if(users[user]){alert("Username exists");return;}
+users[user]=pass;
+localStorage.setItem("users",JSON.stringify(users));
+alert("Registered! You can now login");
+showLogin();
+}
+
+function login(){
+let user=document.getElementById("loginUser").value.trim();
+let pass=document.getElementById("loginPass").value;
+let users = JSON.parse(localStorage.getItem("users")||"{}");
+if(users[user] && users[user]===pass){
+currentUser = user;
+localStorage.setItem("currentUser",currentUser);
+updateLoginUI();
+alert("Logged in as "+currentUser);
+document.getElementById("loginForm").style.display="none";
+loadWatch();
+}else{alert("Invalid credentials");}
+}
+
+function logout(){
+currentUser="";
+localStorage.removeItem("currentUser");
+updateLoginUI();
+alert("Logged out");
+loadWatch();
+}
+
+function updateLoginUI(){
+document.getElementById("loginBtn").classList.toggle("hidden", currentUser!=="");
+document.getElementById("logoutBtn").classList.toggle("hidden", currentUser==="");
+}
+
+// WATCHLIST
+function addWatch(a){
+if(!currentUser){alert("Login to add to watchlist"); return;}
+let userWatch = JSON.parse(localStorage.getItem("watch_"+currentUser)||"[]");
+if(!userWatch.some(item=>item.title===a.title)){
+userWatch.push(a);
+localStorage.setItem("watch_"+currentUser,JSON.stringify(userWatch));
+loadWatch();
+}
+}
+
+function loadWatch(){
+let box=document.getElementById("watchlist");
+box.innerHTML="";
+if(!currentUser){box.innerHTML="<p style='text-align:center'>Login to see your watchlist</p>"; return;}
+let userWatch = JSON.parse(localStorage.getItem("watch_"+currentUser)||"[]");
+userWatch.forEach(a=>{
+box.innerHTML+=`
+<div class="card">
+<img class="poster" src="${a.img}">
+<div class="content">${a.title}</div>
+</div>`;
+});
+}
+
+// COMMENTS
+let currentAnime="";
+
+function addComment(){
+if(!currentUser){alert("Login to comment"); return;}
+let txt=document.getElementById("commentInput").value;
+if(!txt){return;}
+let comments=JSON.parse(localStorage.getItem("comments_"+currentUser)||"{}");
+if(!comments[currentAnime]) comments[currentAnime]=[];
+comments[currentAnime].push({text:txt});
+localStorage.setItem("comments_"+currentUser,JSON.stringify(comments));
+document.getElementById("commentInput").value="";
+loadComments();
+}
+
+function loadComments(){
+let box=document.getElementById("comments");
+box.innerHTML="";
+if(!currentUser){box.innerHTML="<p>Login to see comments</p>"; return;}
+let commentsAll=JSON.parse(localStorage.getItem("comments_"+currentUser)||"{}");
+let comments = commentsAll[currentAnime] || [];
+if(comments.length===0){box.innerHTML="<p>No comments yet</p>"; return;}
+comments.forEach(c=>{
+box.innerHTML+=`<p>${c.text}</p>`;
+});
+}
+
+// SEARCH
+async function searchAnime(){
+let q=document.getElementById("search").value.trim();
+
+// Hide AI recommendations if searching
+document.getElementById("aiBox").style.display = q ? "none" : "grid";
+
+if(!q){
+document.getElementById("animeBox").innerHTML="";
+return;
+}
+
+let res=await fetch(`https://api.jikan.moe/v4/anime?q=${q}`);
+let data=await res.json();
+showAnime(data.data);
+}
+
+// Show AI again if search input cleared
+function handleSearchInput(){
+let q=document.getElementById("search").value.trim();
+document.getElementById("aiBox").style.display = q ? "none" : "grid";
+}
+
+// SHOW ANIME
+function showAnime(list){
+let box=document.getElementById("animeBox");
+box.innerHTML="";
+list.forEach(a=>{
+let el=document.createElement("div");
+el.className="card";
+el.onclick=()=>openDetail(a);
+el.innerHTML=`
+<img class="poster" src="${a.images.jpg.large_image_url}">
+<div class="content">
+<h3>${a.title}</h3>
+⭐ ${a.score||"N/A"}
+</div>`;
+box.appendChild(el);
+});
+}
+
+// AI RECOMMENDATIONS
+async function loadTrending(){
+let res = await fetch("https://api.jikan.moe/v4/top/anime");
+let data = await res.json();
+generateAI(data.data);
+}
+
+function generateAI(list){
+let box=document.getElementById("aiBox");
+box.innerHTML="";
+let top=list.slice(0,8);
+top.forEach(a=>{
+const el=document.createElement("div");
+el.className="card";
+el.onclick=()=>openDetail(a);
+el.innerHTML=`
+<img class="poster" src="${a.images.jpg.large_image_url}">
+<div class="content">${a.title}</div>`;
+box.appendChild(el);
+});
+}
+
+// DETAIL PAGE
+function openDetail(a){
+document.getElementById("mainPage").classList.add("hidden");
+document.getElementById("detailPage").classList.remove("hidden");
+currentAnime=a.title;
+document.getElementById("details").innerHTML=`
+<h2>${a.title}</h2>
+<img class="detail-img" src="${a.images.jpg.large_image_url}">
+<p><b>⭐ Rating:</b> ${a.score}</p>
+<p><b>📺 Episodes:</b> ${a.episodes}</p>
+<p><b>📅 Status:</b> ${a.status}</p>
+<p>${a.synopsis}</p>
+${a.trailer?.url ? `<iframe width="100%" height="350" src="${a.trailer.url.replace("watch?v=","embed/")}" allowfullscreen></iframe>` : ""}
+<button onclick='addWatch({title:"${a.title}",img:"${a.images.jpg.large_image_url}"})'>➕ Add to Watchlist</button>
+<div class="clear"></div>`;
+loadComments();
+}
+
+// BACK
+function goBack(){
+document.getElementById("detailPage").classList.add("hidden");
+document.getElementById("mainPage").classList.remove("hidden");
+// Show AI recommendations again
+document.getElementById("aiBox").style.display = "grid";
+}
+
+// LOAD DEFAULT AI ON START
+loadTrending();
+loadWatch();
+
+</script>
+</body>
+</html>
